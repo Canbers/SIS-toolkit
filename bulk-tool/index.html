@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bulk Tool</title>
+    <meta name="color-scheme" content="light dark">
+    <style>
+      :root {
+        --bg: #ffffff;
+        --fg: #1f2937;
+        --muted: #6b7280;
+        --border: #e5e7eb;
+        --accent: #2563eb;
+        --ok: #16a34a;
+        --warn: #d97706;
+        --err: #dc2626;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b0d12;
+          --fg: #e5e7eb;
+          --muted: #9ca3af;
+          --border: #1f2937;
+          --accent: #60a5fa;
+          --ok: #22c55e;
+          --warn: #f59e0b;
+          --err: #ef4444;
+        }
+      }
+      html, body { height: 100%; }
+      body {
+        margin: 0; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
+        background: var(--bg); color: var(--fg);
+      }
+      header { padding: 16px; border-bottom: 1px solid var(--border); }
+      h1 { margin: 0; font-size: 18px; }
+      main { display: grid; gap: 16px; padding: 16px; grid-template-columns: 1fr; }
+      section { border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+      section h2 { margin: 0 0 8px 0; font-size: 16px; }
+      .row { display: grid; grid-template-columns: repeat(12, 1fr); gap: 8px; align-items: center; }
+      label { color: var(--muted); font-size: 12px; }
+      input, select, textarea, button { color: var(--fg); background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+      input[type="checkbox"] { width: auto; }
+      textarea { min-height: 90px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+      pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+      .button { background: var(--accent); color: white; border: none; }
+      .muted { color: var(--muted); }
+      .log { height: 220px; overflow: auto; background: rgba(127,127,127,0.06); border-radius: 6px; padding: 8px; }
+      .kvs { display: grid; grid-template-columns: 160px 1fr; gap: 8px 12px; }
+      .counter { display: inline-block; min-width: 3ch; text-align: right; }
+      progress { width: 100%; height: 12px; accent-color: var(--accent); }
+      .ok { color: var(--ok); }
+      .warn { color: var(--warn); }
+      .err { color: var(--err); }
+      footer { padding: 8px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+      @media (min-width: 1100px) {
+        main { grid-template-columns: 1.1fr 1fr; }
+        #logs { grid-column: 1 / -1; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Bulk Tool <span class="muted">(local)</span></h1>
+    </header>
+    <main>
+      <section id="config">
+        <h2>Config</h2>
+        <div class="kvs">
+          <label for="cfg_base">Base URL</label>
+          <input id="cfg_base" placeholder="https://api.saas.tld" />
+
+          <label for="cfg_tenant">Tenant</label>
+          <input id="cfg_tenant" placeholder="optional" />
+
+          <label for="cfg_token">Token</label>
+          <input id="cfg_token" placeholder="paste token" />
+
+          <label for="cfg_persist">Persist token</label>
+          <input id="cfg_persist" type="checkbox" />
+
+          <label for="cfg_conc">Concurrency</label>
+          <input id="cfg_conc" type="number" min="1" value="4" />
+
+          <label for="cfg_chunk">Chunk size</label>
+          <input id="cfg_chunk" type="number" min="1" value="50" />
+
+          <label for="cfg_dry">Dry run</label>
+          <input id="cfg_dry" type="checkbox" />
+        </div>
+        <div class="controls" style="margin-top:8px">
+          <button id="cfg_save" class="button">Save</button>
+          <button id="cfg_clear">Clear</button>
+        </div>
+      </section>
+
+      <section id="console">
+        <h2>REST Console</h2>
+        <div class="grid-2">
+          <div>
+            <div class="row" style="margin-bottom:8px">
+              <select id="c_method">
+                <option>GET</option>
+                <option>POST</option>
+                <option>PUT</option>
+                <option>PATCH</option>
+                <option>DELETE</option>
+              </select>
+              <input id="c_url" placeholder="/v1/... or https://..." style="grid-column: span 11" />
+            </div>
+            <label for="c_headers">Headers (JSON or key:value lines)</label>
+            <textarea id="c_headers" placeholder='{"X-Trace":"1"}'></textarea>
+            <label for="c_body">Body (optional)</label>
+            <textarea id="c_body" placeholder='{"example":true}'></textarea>
+            <div class="controls" style="margin-top:8px">
+              <button id="c_send" class="button">Send</button>
+            </div>
+          </div>
+          <div>
+            <label>Response</label>
+            <pre id="c_resp" style="min-height:240px"></pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="scripts">
+        <h2>Scripts</h2>
+        <div class="row" style="margin-bottom:8px">
+          <label for="s_pick" style="grid-column: span 2">Choose</label>
+          <select id="s_pick" style="grid-column: span 10"></select>
+        </div>
+        <div id="s_form"></div>
+      </section>
+
+      <section id="runner">
+        <h2>Runner</h2>
+        <div class="controls" style="margin-bottom:8px">
+          <button id="s_preview">Preview</button>
+          <button id="s_run" class="button">Run</button>
+          <button id="s_cancel">Cancel</button>
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <progress id="r_prog" value="0" max="100"></progress>
+        </div>
+        <div class="controls">
+          <span>Processed: <span id="r_done" class="counter">0</span></span>
+          <span class="ok">OK: <span id="r_ok" class="counter">0</span></span>
+          <span class="warn">Fail: <span id="r_fail" class="counter">0</span></span>
+        </div>
+      </section>
+
+      <section id="logs">
+        <h2>Logs</h2>
+        <div class="controls" style="margin-bottom:8px">
+          <button id="log_download">Download</button>
+          <span class="muted">Token will be redacted</span>
+        </div>
+        <div id="log_view" class="log" aria-live="polite"></div>
+      </section>
+    </main>
+    <footer>
+      Local-only bulk tool. Nothing is sent anywhere except your API.
+    </footer>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+  </html>
+
