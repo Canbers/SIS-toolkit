@@ -152,13 +152,8 @@ function buildPermissionReassignScript({ resolveUrl, fetchWithBackoff, log }) {
       if (!parsed.replacementBundle || !parsed.targetBundles.length) {
         throw new Error('Bundles not configured. Fetch bundles and configure fields before executing.');
       }
-      const dry = ctx?.state?.cfg?.dryRun;
       const url = buildUserUrl(parsed.userUpdatePath, item.id, resolveUrl);
       const body = buildUserUpdatePayload(item);
-      if (dry) {
-        L.info?.(`Would update user ${item.id} (${item.email}) bundles -> ${JSON.stringify(body.user.permission_bundles)}`);
-        return;
-      }
       const res = await fetchWithBackoff(() => ctx.request({
         method: 'PUT',
         url,

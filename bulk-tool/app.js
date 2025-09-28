@@ -21,7 +21,7 @@ function loadCfg() {
     const raw = localStorage.getItem(LS_CFG_KEY);
     if (raw) {
       const saved = JSON.parse(raw);
-      const { tenantId, dryRun, ...rest } = saved || {};
+      const { tenantId, ...rest } = saved || {};
       state.cfg = { ...state.cfg, ...rest };
     }
   } catch {}
@@ -62,7 +62,6 @@ function saveCfg() {
   const tokenEl = byId('cfg_token');
   state.token = tokenEl ? tokenEl.value.trim() : '';
   delete state.cfg.tenantId;
-  delete state.cfg.dryRun;
   try {
     localStorage.setItem(LS_CFG_KEY, JSON.stringify(state.cfg));
     if (state.cfg.persistToken) localStorage.setItem(LS_TOKEN_KEY, state.token);
