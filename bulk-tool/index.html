@@ -11,7 +11,9 @@
         --fg: #1f2937;
         --muted: #6b7280;
         --border: #e5e7eb;
+        --border-strong: #d1d5db;
         --accent: #2563eb;
+        --accent-soft: rgba(37, 99, 235, 0.12);
         --ok: #16a34a;
         --warn: #d97706;
         --err: #dc2626;
@@ -22,149 +24,652 @@
           --fg: #e5e7eb;
           --muted: #9ca3af;
           --border: #1f2937;
+          --border-strong: #374151;
           --accent: #60a5fa;
+          --accent-soft: rgba(96, 165, 250, 0.18);
           --ok: #22c55e;
           --warn: #f59e0b;
           --err: #ef4444;
         }
       }
-      html, body { height: 100%; }
-      body {
-        margin: 0; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
-        background: var(--bg); color: var(--fg);
+      * {
+        box-sizing: border-box;
       }
-      header { padding: 16px; border-bottom: 1px solid var(--border); }
-      h1 { margin: 0; font-size: 18px; }
-      main { display: grid; gap: 16px; padding: 16px; grid-template-columns: 1fr; }
-      section { border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
-      section h2 { margin: 0 0 8px 0; font-size: 16px; }
-      .row { display: grid; grid-template-columns: repeat(12, 1fr); gap: 8px; align-items: center; }
-      label { color: var(--muted); font-size: 12px; }
-      input, select, textarea, button { color: var(--fg); background: transparent; border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
-      input[type="checkbox"] { width: auto; }
-      textarea { min-height: 90px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
-      pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
-      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-      .controls { display: flex; gap: 8px; flex-wrap: wrap; }
-      .button { background: var(--accent); color: white; border: none; }
-      .muted { color: var(--muted); }
-      .log { height: 220px; overflow: auto; background: rgba(127,127,127,0.06); border-radius: 6px; padding: 8px; }
-      .kvs { display: grid; grid-template-columns: 160px 1fr; gap: 8px 12px; }
-      .counter { display: inline-block; min-width: 3ch; text-align: right; }
-      progress { width: 100%; height: 12px; accent-color: var(--accent); }
-      .ok { color: var(--ok); }
-      .warn { color: var(--warn); }
-      .err { color: var(--err); }
-      footer { padding: 8px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
-      @media (min-width: 1100px) {
-        main { grid-template-columns: 1.1fr 1fr; }
-        #logs { grid-column: 1 / -1; }
+      html, body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif;
+      }
+      a {
+        color: var(--accent);
+      }
+      .topbar {
+        border-bottom: 1px solid var(--border);
+        background: var(--bg);
+        padding: 24px 5vw 20px;
+      }
+      .topbar-content {
+        max-width: 1280px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      .topbar h1 {
+        margin: 0;
+        font-size: 26px;
+      }
+      .topbar p {
+        margin: 6px 0 0;
+        color: var(--muted);
+      }
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        border-radius: 999px;
+        padding: 6px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+      .layout {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 28px 5vw 56px;
+        display: grid;
+        grid-template-columns: minmax(0, 2.6fr) minmax(0, 1fr);
+        gap: 24px;
+        align-items: start;
+      }
+      .primary {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .secondary {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        position: sticky;
+        top: 24px;
+        align-self: start;
+        max-height: calc(100vh - 24px);
+        overflow: auto;
+      }
+      section.card {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 22px;
+        background: rgba(127, 127, 127, 0.035);
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+      }
+      .section-head {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+      }
+      .section-head h2 {
+        margin: 0;
+        font-size: 20px;
+      }
+      .section-head p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        max-width: 52ch;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .chip-step {
+        min-width: 70px;
+      }
+      .step-list {
+        margin: 0;
+        padding-left: 20px;
+        display: grid;
+        gap: 12px;
+      }
+      .step-list li {
+        color: var(--muted);
+      }
+      .step-list strong {
+        color: var(--fg);
+        display: block;
+      }
+      .form-grid {
+        display: grid;
+        gap: 16px 20px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .input-with-toggle {
+        display: flex;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .input-with-toggle input {
+        flex: 1;
+      }
+      .input-with-toggle button {
+        flex: 0 0 auto;
+        margin: 0;
+        height: 100%;
+        white-space: nowrap;
+      }
+      .field label {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .hint {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      input,
+      select,
+      textarea,
+      button {
+        font: inherit;
+        color: var(--fg);
+        background: rgba(127, 127, 127, 0.04);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px 12px;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+      }
+      input:focus,
+      select:focus,
+      textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+        background: rgba(37, 99, 235, 0.055);
+      }
+      textarea {
+        min-height: 120px;
+        resize: vertical;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      }
+      button {
+        cursor: pointer;
+        font-weight: 600;
+        border-radius: 999px;
+        padding: 10px 18px;
+        border: 1px solid transparent;
+        background: rgba(127, 127, 127, 0.08);
+      }
+      button:hover:not(:disabled) {
+        background: rgba(127, 127, 127, 0.12);
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      /* Enhanced select UI */
+      .enh-select { position: relative; }
+      .enh-control { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px; border: 1px solid var(--border); border-radius: 10px; background: rgba(127,127,127,0.04); }
+      .enh-input { flex: 1; min-width: 120px; border: none; background: transparent; padding: 6px; }
+      .enh-input:focus { outline: none; box-shadow: none; }
+      .enh-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+      .enh-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; }
+      .enh-pill-x { border: none; background: transparent; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 4px; }
+      .enh-dropdown { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 6px); border: 1px solid var(--border); border-radius: 10px; background: var(--bg); box-shadow: 0 10px 30px rgba(15,23,42,0.16); display: none; max-height: 260px; overflow: auto; }
+      .enh-dropdown.open { display: block; }
+      .enh-dropdown ul { list-style: none; margin: 0; padding: 6px; }
+      .enh-item { width: 100%; text-align: left; display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: transparent; border: none; border-radius: 8px; }
+      .enh-item:hover:not(:disabled) { background: rgba(127,127,127,0.08); }
+      .button {
+        background: var(--accent);
+        color: #ffffff;
+      }
+      .button:hover:not(:disabled) {
+        background: rgba(37, 99, 235, 0.92);
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+      .controls-end {
+        justify-content: flex-end;
+      }
+      /* Tabs */
+      .tabs { display: flex; flex-direction: column; gap: 16px; }
+      .tab-list { display: flex; gap: 6px; border-bottom: 1px solid var(--border); }
+      .tab { background: transparent; border: none; border-radius: 0; padding: 10px 14px; font-weight: 600; color: var(--muted); border-bottom: 2px solid transparent; }
+      .tab:hover { background: rgba(127,127,127,0.08); color: var(--fg); }
+      .tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+      [role="tabpanel"] { padding-top: 12px; display: grid; gap: 24px; }
+      [role="tabpanel"][hidden] { display: none; }
+      /* Subheads */
+      .subhead { margin: 0 0 8px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+      /* Large inputs */
+      .textarea-large { min-height: 96px; }
+      /* Scrollable pre blocks optimized for large payloads */
+      .pre-scroll { white-space: pre; overflow: auto; min-height: 260px; max-height: 520px; }
+      .pre-headers { white-space: pre-wrap; overflow: auto; max-height: 200px; }
+      /* Thin divider for sections */
+      .section-divider { height: 1px; background: var(--border); border-radius: 1px; margin: 4px 0; }
+      /* JSON editor container (Ace) */
+      .json-editor { position: relative; border: 1px solid var(--border); border-radius: 10px; background: rgba(127,127,127,0.04); min-height: 100px; resize: vertical; overflow: auto; }
+      .json-editor.focused { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); background: rgba(37,99,235,0.055); }
+      .field-checkbox {
+        flex-direction: row;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .field-checkbox input[type="checkbox"] {
+        width: auto;
+        margin-top: 6px;
+      }
+      .field-checkbox label {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .field-checkbox label span {
+        display: block;
+        color: var(--muted);
+        font-weight: 400;
+        margin-top: 4px;
+        font-size: 12px;
+      }
+      .request-row {
+        display: flex;
+        gap: 12px;
+        align-items: stretch;
+      }
+      .request-row select {
+        flex: 0 0 120px;
+      }
+      .request-row input {
+        flex: 1;
+      }
+      .split {
+        display: grid;
+        gap: 20px;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .callout {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px 14px;
+        background: rgba(127, 127, 127, 0.06);
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .callout strong {
+        color: var(--fg);
+      }
+      .log {
+        height: 240px;
+        overflow: auto;
+        background: rgba(15, 23, 42, 0.07);
+        border-radius: 12px;
+        padding: 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      }
+      #r_run_detail {
+        white-space: pre-wrap;
+      }
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+        font-size: 13px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.06);
+        padding: 14px;
+        min-height: 260px;
+      }
+      .status-grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      }
+      .status-card {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        background: rgba(127, 127, 127, 0.05);
+      }
+      .status-card span {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .status-card strong {
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .status-card.ok strong {
+        color: var(--ok);
+      }
+      .status-card.warn strong {
+        color: var(--warn);
+      }
+      .status-card.err strong {
+        color: var(--err);
+      }
+      progress {
+        width: 100%;
+        height: 14px;
+        border-radius: 999px;
+        overflow: hidden;
+        accent-color: var(--accent);
+        background: rgba(127, 127, 127, 0.12);
+      }
+      .empty-state {
+        text-align: center;
+        padding: 24px;
+        border: 1px dashed var(--border);
+        border-radius: 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .tip-list {
+        margin: 0;
+        padding-left: 18px;
+        display: grid;
+        gap: 8px;
+        color: var(--muted);
+      }
+      details summary {
+        cursor: pointer;
+        font-weight: 600;
+        color: var(--fg);
+      }
+      details {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px 16px;
+        background: rgba(127, 127, 127, 0.05);
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      }
+      footer {
+        border-top: 1px solid var(--border);
+        padding: 18px 5vw 24px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .footer-inner {
+        max-width: 1280px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      @media (max-width: 1100px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .secondary {
+          position: static;
+        }
+      }
+      @media (max-width: 640px) {
+        .topbar {
+          padding: 20px 20px 16px;
+        }
+        .layout {
+          padding: 24px 20px 48px;
+        }
       }
     </style>
   </head>
   <body>
-    <header>
-      <h1>Bulk Tool <span class="muted">(local)</span></h1>
+    <header class="topbar">
+      <div class="topbar-content">
+        <div>
+          <h1>Bulk Tool</h1>
+          <p>Manage scripted operations across your SIS tenant safely. Configure the basics, preview outcomes, and run with confidence.</p>
+        </div>
+        <div class="status-pill" id="env_status">
+          <span aria-hidden="true">●</span>
+          Local environment
+        </div>
+      </div>
     </header>
-    <main>
-      <section id="config">
-        <h2>Config</h2>
-        <div class="kvs">
-          <label for="cfg_base">Base URL</label>
-          <input id="cfg_base" placeholder="https://api.saas.tld" />
-
-          <label for="cfg_tenant">Tenant</label>
-          <input id="cfg_tenant" placeholder="optional" />
-
-          <label for="cfg_token">Token</label>
-          <input id="cfg_token" placeholder="paste token" />
-
-          <label for="cfg_persist">Persist token</label>
-          <input id="cfg_persist" type="checkbox" />
-
-          <label for="cfg_conc">Concurrency</label>
-          <input id="cfg_conc" type="number" min="1" value="4" />
-
-          <label for="cfg_chunk">Chunk size</label>
-          <input id="cfg_chunk" type="number" min="1" value="50" />
-
-          <label for="cfg_dry">Dry run</label>
-          <input id="cfg_dry" type="checkbox" />
-        </div>
-        <div class="controls" style="margin-top:8px">
-          <button id="cfg_save" class="button">Save</button>
-          <button id="cfg_clear">Clear</button>
-        </div>
-      </section>
-
-      <section id="console">
-        <h2>REST Console</h2>
-        <div class="grid-2">
-          <div>
-            <div class="row" style="margin-bottom:8px">
-              <select id="c_method">
-                <option>GET</option>
-                <option>POST</option>
-                <option>PUT</option>
-                <option>PATCH</option>
-                <option>DELETE</option>
-              </select>
-              <input id="c_url" placeholder="/v1/... or https://..." style="grid-column: span 11" />
-            </div>
-            <label for="c_headers">Headers (JSON or key:value lines)</label>
-            <textarea id="c_headers" placeholder='{"X-Trace":"1"}'></textarea>
-            <label for="c_body">Body (optional)</label>
-            <textarea id="c_body" placeholder='{"example":true}'></textarea>
-            <div class="controls" style="margin-top:8px">
-              <button id="c_send" class="button">Send</button>
-            </div>
+    <main class="layout">
+      <div class="primary">
+        <div class="tabs">
+          <div class="tab-list" role="tablist" aria-label="Main sections">
+            <button id="tab_conn" class="tab" role="tab" aria-selected="true" aria-controls="panel_conn">Connection</button>
+            <button id="tab_console" class="tab" role="tab" aria-selected="false" aria-controls="panel_console">Request Console</button>
+            <button id="tab_scripts" class="tab" role="tab" aria-selected="false" aria-controls="panel_scripts">Scripts</button>
           </div>
-          <div>
-            <label>Response</label>
-            <pre id="c_resp" style="min-height:240px"></pre>
+
+          <div id="panel_conn" role="tabpanel" tabindex="0">
+            <section id="config" class="card">
+              <div class="section-head">
+                <h2>Connection</h2>
+                <p>Start by telling the tool where to connect. We keep your token local and never share it externally.</p>
+              </div>
+              <div class="form-grid">
+                <div class="field">
+                  <label for="cfg_base">Base URL</label>
+                  <input id="cfg_base" placeholder="https://api.your-domain.tld" />
+                  <p class="hint">Use the API root. We’ll connect over HTTPS.</p>
+                </div>
+                <div class="field">
+                  <label for="cfg_token">API Token</label>
+                  <div class="input-with-toggle">
+                    <input id="cfg_token" type="password" placeholder="Paste personal access token" />
+                    <button id="cfg_token_toggle" type="button" aria-pressed="false">Show</button>
+                  </div>
+                  <p class="hint">Token stays on this device. We never transmit it anywhere else.</p>
+                </div>
+                <div class="field field-checkbox">
+                  <input id="cfg_persist" type="checkbox" />
+                  <label for="cfg_persist">Remember token<span>Stores in your browser. Clear to remove later.</span></label>
+                </div>
+                <div class="field">
+                  <label for="cfg_conc">Concurrency</label>
+                  <input id="cfg_conc" type="number" min="1" value="4" />
+                  <p class="hint">How many requests we send at the same time. Higher is faster but heavier.</p>
+                </div>
+                <div class="field">
+                  <label for="cfg_chunk">Chunk size</label>
+                  <input id="cfg_chunk" type="number" min="1" value="50" />
+                  <p class="hint">How many records to process before pausing to regroup.</p>
+                </div>
+              </div>
+              <div class="controls controls-end" style="margin-top:18px">
+                <button id="cfg_clear">Reset</button>
+                <button id="cfg_save" class="button">Save Connection</button>
+              </div>
+            </section>
+          </div>
+
+          <div id="panel_console" role="tabpanel" tabindex="0" hidden>
+            <section id="console" class="card">
+              <div class="section-head">
+                <h2>Request Console</h2>
+                <p>Send an ad-hoc API request using your saved configuration. Great for checking endpoints before running scripts.</p>
+              </div>
+              <div class="stack">
+                <div class="stack">
+                  <h3 class="subhead">Request</h3>
+                  <div class="field">
+                    <label for="c_url">Request</label>
+                    <div class="request-row">
+                      <select id="c_method" aria-label="HTTP method">
+                        <option>GET</option>
+                        <option>POST</option>
+                        <option>PUT</option>
+                        <option>PATCH</option>
+                        <option>DELETE</option>
+                      </select>
+                      <input id="c_url" placeholder="/v1/... or https://..." />
+                    </div>
+                    <p class="hint">Use a relative path to reuse the base URL, or a full URL to override.</p>
+                  </div>
+                  <div class="field">
+                    <label for="c_headers">Headers</label>
+                    <div id="c_headers" class="json-editor" data-placeholder='{"X-Trace":"1"}'></div>
+                    <p class="hint">JSON object of headers.</p>
+                  </div>
+                  <div class="field">
+                    <label for="c_body">Body</label>
+                    <div id="c_body" class="json-editor" data-placeholder='{"example": true}'></div>
+                    <p class="hint">Optional. Leave blank for GET calls.</p>
+                  </div>
+                  <div class="controls">
+                    <button id="c_send" class="button">Send Request</button>
+                  </div>
+                </div>
+                <div class="section-divider" role="separator" aria-label="Request and response"></div>
+                <div class="stack">
+                  <h3 class="subhead">Response</h3>
+                  <div class="field">
+                    <label for="c_resp_status">Status</label>
+                    <div id="c_resp_status" class="callout" aria-live="polite">No response yet</div>
+                  </div>
+                  <div class="field">
+                    <label for="c_resp_headers">Headers</label>
+                    <pre id="c_resp_headers" class="pre-headers" aria-live="polite"></pre>
+                  </div>
+                  <div class="field">
+                    <label for="c_resp_body">Body</label>
+                    <pre id="c_resp_body" class="pre-scroll" aria-live="polite"></pre>
+                  </div>
+                  <div class="callout">
+                    <strong>Tip:</strong> The console shares auth with your scripts, so you can quickly test the exact payloads we’ll send later.
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div id="panel_scripts" role="tabpanel" tabindex="0" hidden>
+            <section id="scripts" class="card">
+              <div class="section-head">
+                <h2>Scripts</h2>
+                <p>Select what you’d like to do. We’ll tailor the form and let you know how many records are affected before anything runs.</p>
+              </div>
+              <div class="field">
+                <label for="s_pick">Choose a script to run</label>
+                <select id="s_pick"></select>
+                <p class="hint">Need a new script? Drop the file into <code>scripts/</code> and refresh.</p>
+              </div>
+              <div id="s_form" class="stack" style="margin-top:16px"></div>
+            </section>
+
+            <section id="run_summary" class="card">
+              <div class="section-head">
+                <h2>Run Summary</h2>
+                <p>Preview the plan, then execute when you’re ready.</p>
+              </div>
+              <div class="stack" style="gap: 18px;">
+                <div class="controls">
+                  <button id="s_preview">Preview</button>
+                  <button id="s_run" class="button" disabled>Run Script</button>
+                  <button id="s_cancel">Cancel</button>
+                </div>
+                <p id="s_run_help" class="hint">Run is disabled until a successful preview completes. Changing any script settings requires a new preview.</p>
+                <div class="field">
+                  <label for="r_prog">Progress</label>
+                  <progress id="r_prog" value="0" max="100"></progress>
+                  <p class="hint">We’ll update this as batches complete.</p>
+                </div>
+                <div class="status-grid">
+                  <div class="status-card">
+                    <span>Processed</span>
+                    <strong id="r_done">0</strong>
+                  </div>
+                  <div class="status-card ok">
+                    <span>Success</span>
+                    <strong id="r_ok">0</strong>
+                  </div>
+                  <div class="status-card warn">
+                    <span>Failed</span>
+                    <strong id="r_fail">0</strong>
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="r_run_summary">Summary</label>
+                  <div id="r_run_summary" class="callout">No preview or run yet.</div>
+                </div>
+                <div class="field">
+                  <label for="r_run_detail">Details</label>
+                  <pre id="r_run_detail" class="pre-scroll" aria-live="polite"></pre>
+                </div>
+                <details>
+                  <summary>How previews work</summary>
+                  <p class="hint" style="margin-top:10px;">Preview mode fetches data, calculates changes, and shows the impact without touching live records. Use it to double-check before running.</p>
+                </details>
+              </div>
+            </section>
           </div>
         </div>
-      </section>
+      </div>
 
-      <section id="scripts">
-        <h2>Scripts</h2>
-        <div class="row" style="margin-bottom:8px">
-          <label for="s_pick" style="grid-column: span 2">Choose</label>
-          <select id="s_pick" style="grid-column: span 10"></select>
-        </div>
-        <div id="s_form"></div>
-      </section>
-
-      <section id="runner">
-        <h2>Runner</h2>
-        <div class="controls" style="margin-bottom:8px">
-          <button id="s_preview">Preview</button>
-          <button id="s_run" class="button">Run</button>
-          <button id="s_cancel">Cancel</button>
-        </div>
-        <div class="row" style="margin-bottom:8px">
-          <progress id="r_prog" value="0" max="100"></progress>
-        </div>
-        <div class="controls">
-          <span>Processed: <span id="r_done" class="counter">0</span></span>
-          <span class="ok">OK: <span id="r_ok" class="counter">0</span></span>
-          <span class="warn">Fail: <span id="r_fail" class="counter">0</span></span>
-        </div>
-      </section>
-
-      <section id="logs">
-        <h2>Logs</h2>
-        <div class="controls" style="margin-bottom:8px">
-          <button id="log_download">Download</button>
-          <span class="muted">Token will be redacted</span>
-        </div>
-        <div id="log_view" class="log" aria-live="polite"></div>
-      </section>
+      <aside class="secondary">
+        <section id="logs" class="card">
+          <div class="section-head">
+            <h2>Activity Log</h2>
+            <p>Every action is recorded here for quick review and troubleshooting.</p>
+          </div>
+          <div class="controls" style="justify-content: space-between;">
+            <button id="log_download">Download log</button>
+            <span class="muted">Token values are automatically redacted</span>
+          </div>
+          <div id="log_view" class="log" aria-live="polite"></div>
+          <ul class="tip-list" style="margin-top:16px;">
+            <li>Look for <span class="ok">OK</span> entries to confirm success.</li>
+            <li>Failures include the endpoint and payload so you can retry.</li>
+          </ul>
+        </section>
+      </aside>
     </main>
     <footer>
-      Local-only bulk tool. Nothing is sent anywhere except your API.
+      <div class="footer-inner">
+        <span>Runs entirely in your browser; only your API sees the requests.</span>
+        <span>Version <span id="build_version">local</span></span>
+      </div>
     </footer>
 
+    <!-- Lightweight code editor for JSON (Ace) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.23.4/ace.js" integrity="sha512-mr7N3wVORwqf0p9QxquQK1LBh6Go0d2D6hkZ0gK3qzV+Z3Ew0K2hM1jehoFqWzvZ2nW8Kf8qF1toSbk2QZQZ8A==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.23.4/mode-json.min.js" integrity="sha512-jO5QG9R8QpIm6kXK2oF8JX3K1pIhT1l3j3uYtEoPH9k9e3k0Gm4o8OW18xf8qkZf9k6r0J8oWqS8eB2QF9uB+w==" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
     <script type="module" src="/app.js"></script>
   </body>
   </html>

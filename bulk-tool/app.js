@@ -1,3 +1,5 @@
+import registerPermissionReassign from './scripts/permissionReassign.js';
+
 // app.js - single-file modules: state/storage, logger, proxy client, console, scripts, runner
 
 // 4.1 State & Storage
@@ -7,11 +9,9 @@ const LS_TOKEN_KEY = 'sis-bulk:token';
 const state = {
   cfg: {
     baseUrl: '',
-    tenantId: '',
     persistToken: false,
     concurrency: 4,
     chunkSize: 50,
-    dryRun: false,
   },
   token: '',
 };
@@ -21,7 +21,8 @@ function loadCfg() {
     const raw = localStorage.getItem(LS_CFG_KEY);
     if (raw) {
       const saved = JSON.parse(raw);
-      state.cfg = { ...state.cfg, ...saved };
+      const { tenantId, dryRun, ...rest } = saved || {};
+      state.cfg = { ...state.cfg, ...rest };
     }
   } catch {}
   try {
@@ -29,23 +30,39 @@ function loadCfg() {
     if (t) state.token = t;
   } catch {}
   // reflect to UI
-  byId('cfg_base').value = state.cfg.baseUrl || '';
-  byId('cfg_tenant').value = state.cfg.tenantId || '';
-  byId('cfg_token').value = state.token || '';
-  byId('cfg_persist').checked = !!state.cfg.persistToken;
-  byId('cfg_conc').value = String(state.cfg.concurrency || 4);
-  byId('cfg_chunk').value = String(state.cfg.chunkSize || 50);
-  byId('cfg_dry').checked = !!state.cfg.dryRun;
+  const baseEl = byId('cfg_base');
+  if (baseEl) baseEl.value = state.cfg.baseUrl || '';
+  const tokenEl = byId('cfg_token');
+  if (tokenEl) {
+    tokenEl.value = state.token || '';
+    tokenEl.type = 'password';
+  }
+  const toggleBtn = byId('cfg_token_toggle');
+  if (toggleBtn) {
+    toggleBtn.textContent = 'Show';
+    toggleBtn.setAttribute('aria-pressed', 'false');
+  }
+  const persistEl = byId('cfg_persist');
+  if (persistEl) persistEl.checked = !!state.cfg.persistToken;
+  const concEl = byId('cfg_conc');
+  if (concEl) concEl.value = String(state.cfg.concurrency || 4);
+  const chunkEl = byId('cfg_chunk');
+  if (chunkEl) chunkEl.value = String(state.cfg.chunkSize || 50);
 }
 
 function saveCfg() {
-  state.cfg.baseUrl = byId('cfg_base').value.trim();
-  state.cfg.tenantId = byId('cfg_tenant').value.trim();
-  state.cfg.persistToken = !!byId('cfg_persist').checked;
-  state.cfg.concurrency = Math.max(1, parseInt(byId('cfg_conc').value || '4', 10));
-  state.cfg.chunkSize = Math.max(1, parseInt(byId('cfg_chunk').value || '50', 10));
-  state.cfg.dryRun = !!byId('cfg_dry').checked;
-  state.token = byId('cfg_token').value.trim();
+  const baseEl = byId('cfg_base');
+  state.cfg.baseUrl = baseEl ? baseEl.value.trim() : '';
+  const persistEl = byId('cfg_persist');
+  state.cfg.persistToken = !!persistEl?.checked;
+  const concEl = byId('cfg_conc');
+  state.cfg.concurrency = Math.max(1, parseInt(concEl?.value || '4', 10));
+  const chunkEl = byId('cfg_chunk');
+  state.cfg.chunkSize = Math.max(1, parseInt(chunkEl?.value || '50', 10));
+  const tokenEl = byId('cfg_token');
+  state.token = tokenEl ? tokenEl.value.trim() : '';
+  delete state.cfg.tenantId;
+  delete state.cfg.dryRun;
   try {
     localStorage.setItem(LS_CFG_KEY, JSON.stringify(state.cfg));
     if (state.cfg.persistToken) localStorage.setItem(LS_TOKEN_KEY, state.token);
@@ -57,7 +74,7 @@ function saveCfg() {
 }
 
 function clearCfg() {
-  state.cfg = { baseUrl: '', tenantId: '', persistToken: false, concurrency: 4, chunkSize: 50, dryRun: false };
+  state.cfg = { baseUrl: '', persistToken: false, concurrency: 4, chunkSize: 50 };
   state.token = '';
   try {
     localStorage.removeItem(LS_CFG_KEY);
@@ -107,6 +124,46 @@ const log = {
   warn: (m) => pushLog('warn', m),
   err: (m) => pushLog('err', m),
 };
+
+// Scoped script logger that writes to Run Summary details and optionally mirrors to Activity Log
+function createScriptLog({ mirrorLevels = ['warn', 'err'], mirrorFilter } = {}) {
+  function writeToRunDetail(level, msg) {
+    try {
+      const el = byId('r_run_detail');
+      if (!el) return;
+      const ts = new Date().toISOString();
+      const text = typeof msg === 'string' ? msg : JSON.stringify(msg, null, 2);
+      const line = `[${ts}] ${level.toUpperCase()}: ${redact(text)}`;
+      el.textContent += (el.textContent ? '\n' : '') + line;
+      el.scrollTop = el.scrollHeight;
+    } catch {}
+  }
+  return {
+    info: (m) => { writeToRunDetail('info', m); if (mirrorLevels.includes('info') && (!mirrorFilter || mirrorFilter('info', m))) log.info(m); },
+    ok: (m) => { writeToRunDetail('ok', m); if (mirrorLevels.includes('ok') && (!mirrorFilter || mirrorFilter('ok', m))) log.ok(m); },
+    warn: (m) => { writeToRunDetail('warn', m); if (mirrorLevels.includes('warn') && (!mirrorFilter || mirrorFilter('warn', m))) log.warn(m); },
+    err: (m) => { writeToRunDetail('err', m); if (mirrorLevels.includes('err') && (!mirrorFilter || mirrorFilter('err', m))) log.err(m); },
+  };
+}
+
+function clearRunDetail() {
+  const el = byId('r_run_detail');
+  if (el) el.textContent = '';
+}
+
+function setRunSummary(text) {
+  const el = byId('r_run_summary');
+  if (el) el.textContent = text || '';
+}
+
+function appendRunDetail(text) {
+  try {
+    const el = byId('r_run_detail');
+    if (!el) return;
+    el.textContent += (el.textContent ? '\n' : '') + String(text ?? '');
+    el.scrollTop = el.scrollHeight;
+  } catch {}
+}
 
 function downloadLogs() {
   const txt = logger.lines.map(l => `[${l.ts}] ${l.level.toUpperCase()}: ${l.msg}`).join('\n');
@@ -213,6 +270,58 @@ function wait(ms, { signal } = {}) {
 }
 
 // 4.4 REST Console
+// Simple JSON editors (Ace with graceful fallback)
+const editors = {};
+
+function initJsonEditor(id) {
+  const el = byId(id);
+  if (!el) return null;
+  try {
+    if (window.ace && typeof window.ace.edit === 'function') {
+      const editor = window.ace.edit(el);
+      editor.session.setMode('ace/mode/json');
+      editor.setOptions({
+        tabSize: 2,
+        useSoftTabs: true,
+        wrap: true,
+        showPrintMargin: false,
+        highlightActiveLine: true,
+        behavioursEnabled: true,
+      });
+      editor.on('focus', () => el.classList.add('focused'));
+      editor.on('blur', () => el.classList.remove('focused'));
+      // Resize with container
+      try {
+        const ro = new ResizeObserver(() => editor.resize());
+        ro.observe(el);
+        el._ro = ro;
+      } catch {}
+      editors[id] = {
+        get: () => editor.getValue(),
+        set: (v) => editor.session.setValue(v || '', -1),
+        instance: editor,
+      };
+      return editors[id];
+    }
+  } catch {}
+  // Fallback: contenteditable div
+  el.contentEditable = 'true';
+  el.setAttribute('role', 'textbox');
+  el.setAttribute('aria-multiline', 'true');
+  el.addEventListener('focus', () => el.classList.add('focused'));
+  el.addEventListener('blur', () => el.classList.remove('focused'));
+  editors[id] = {
+    get: () => (el.textContent || ''),
+    set: (v) => { el.textContent = v || ''; },
+  };
+  return editors[id];
+}
+
+function getEditorValue(id) {
+  const ed = editors[id];
+  if (!ed) return '';
+  try { return ed.get() || ''; } catch { return ''; }
+}
 function parseHeaders(input) {
   const txt = (input || '').trim();
   if (!txt) return {};
@@ -242,29 +351,108 @@ async function handleSend() {
   const method = byId('c_method').value;
   const urlRaw = byId('c_url').value;
   const url = resolveUrl(urlRaw);
-  const headers = parseHeaders(byId('c_headers').value);
-  const body = parseBody(byId('c_body').value);
+  const headers = parseHeaders(getEditorValue('c_headers'));
+  const body = parseBody(getEditorValue('c_body'));
   log.info(`Send ${method} ${url}`);
   try {
+    const statusEl = byId('c_resp_status');
+    const hdrEl = byId('c_resp_headers');
+    const bodyEl = byId('c_resp_body');
+    if (statusEl) statusEl.textContent = 'Sending…';
+    if (hdrEl) hdrEl.textContent = '';
+    if (bodyEl) bodyEl.textContent = '';
+
     const res = await fetchWithBackoff(() => proxyRequest({ method, url, headers, body, timeout: 30000 }), 4, {});
-    byId('c_resp').textContent = JSON.stringify(res, null, 2);
+
+    // Format headers
+    function formatHeaders(h) {
+      try {
+        if (!h) return '';
+        const entries = Array.isArray(h) ? h : Object.entries(h);
+        const lines = entries
+          .map(([k, v]) => [String(k), Array.isArray(v) ? v.join(', ') : String(v)])
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([k, v]) => `${k}: ${v}`);
+        return lines.join('\n');
+      } catch { return ''; }
+    }
+    // Format body, attempting pretty JSON
+    function formatBody(b) {
+      try {
+        if (b == null) return '';
+        if (typeof b === 'string') {
+          try { return JSON.stringify(JSON.parse(b), null, 2); } catch { return b; }
+        }
+        if (typeof b === 'object') return JSON.stringify(b, null, 2);
+        return String(b);
+      } catch { return String(b); }
+    }
+
+    if (statusEl) statusEl.textContent = `HTTP ${res?.status ?? ''}`;
+    if (hdrEl) hdrEl.textContent = formatHeaders(res?.headers);
+    if (bodyEl) bodyEl.textContent = formatBody(res?.body);
     log.ok(`${method} ${url} -> ${res.status}`);
   } catch (e) {
+    const statusEl = byId('c_resp_status');
+    const hdrEl = byId('c_resp_headers');
+    const bodyEl = byId('c_resp_body');
     const data = e?.data || { error: e?.message || String(e) };
-    byId('c_resp').textContent = JSON.stringify(data, null, 2);
+    if (statusEl) statusEl.textContent = `Error${data?.status ? ` ${data.status}` : ''}`;
+    if (hdrEl) hdrEl.textContent = '';
+    if (bodyEl) bodyEl.textContent = JSON.stringify(data, null, 2);
     log.err(`${method} ${url} failed: ${data.error || e?.message}`);
   }
 }
 
 // 4.5 Scripts System
-/** @typedef {{type:'text'|'number'|'checkbox'|'select'|'textarea', name:string, label:string, required?:boolean, default?:any, options?:{label:string,value:string}[], placeholder?:string}} ScriptField */
+/** @typedef {{label:string,value:string,disabled?:boolean}} ScriptFieldOption */
+/** @typedef {{
+ *   type:'text'|'number'|'checkbox'|'select'|'textarea'|'multiselect'|'button',
+ *   name:string,
+ *   label:string,
+ *   required?:boolean,
+ *   default?:any,
+ *   options?:ScriptFieldOption[],
+ *   placeholder?:string,
+ *   // UX niceties for selects
+ *   searchable?:boolean,
+ *   checkboxes?:boolean,
+ *   showPills?:boolean,
+ *   loadOptions?:(ctx:{
+ *     request:typeof proxyRequest,
+ *     resolveUrl:typeof resolveUrl,
+ *     fetchWithBackoff:typeof fetchWithBackoff,
+ *     getFieldValue:(fieldName:string)=>any,
+ *     setFieldValue:(fieldName:string,value:any)=>void,
+ *     reloadFieldOptions:(fieldName:string, options?:{preserveSelection?:boolean})=>Promise<void>,
+ *     log:typeof log,
+ *   })=>Promise<ScriptFieldOption[]>,
+ *   reloadOn?:string[],
+ *   autoLoad?:boolean,
+ *   onClick?:(ctx:{
+ *     request:typeof proxyRequest,
+ *     resolveUrl:typeof resolveUrl,
+ *     fetchWithBackoff:typeof fetchWithBackoff,
+ *     getFieldValue:(fieldName:string)=>any,
+ *     setFieldValue:(fieldName:string,value:any)=>void,
+ *     reloadFieldOptions:(fieldName:string, options?:{preserveSelection?:boolean})=>Promise<void>,
+ *     log:typeof log,
+ *   })=>Promise<void>|void,
+}} ScriptField */
 /** @typedef {{id:string,name:string,fields:ScriptField[],preview:(cfg:any,ctx:any)=>Promise<any>,plan:(cfg:any,ctx:any)=>Promise<any[]>,execute:(item:any,cfg:any,ctx:any)=>Promise<void>}} Script */
 
 const SCRIPT_REGISTRY = [];
 
 function registerScripts(list) {
-  for (const s of list) SCRIPT_REGISTRY.push(s);
-  renderScriptPicker();
+  let inserted = 0;
+  for (const s of list) {
+    if (!s || !s.id) continue;
+    const exists = SCRIPT_REGISTRY.some((existing) => existing.id === s.id);
+    if (exists) continue;
+    SCRIPT_REGISTRY.push(s);
+    inserted += 1;
+  }
+  if (inserted) renderScriptPicker();
 }
 
 function renderScriptPicker() {
@@ -283,11 +471,217 @@ function getCurrentScript() {
   return SCRIPT_REGISTRY.find(s => s.id === id) || null;
 }
 
-function renderScriptForm(script) {
+async function renderScriptForm(script) {
   const container = byId('s_form');
   container.innerHTML = '';
   if (!script) return;
+  // Any time the form is (re)rendered, require a fresh preview
+  setRunEnabled(false);
   const frag = document.createDocumentFragment();
+  const fieldContexts = new Map();
+  const context = {
+    request: proxyRequest,
+    resolveUrl,
+    fetchWithBackoff,
+    getFieldValue(name) {
+      const el = byId(`f_${name}`);
+      if (!el) return undefined;
+      if (el.dataset.multiselect === '1') return Array.from(el.selectedOptions).map(o => o.value);
+      if (el.type === 'checkbox') return !!el.checked;
+      if (el.type === 'number') return Number(el.value);
+      return el.value;
+    },
+    setFieldValue(name, value) {
+      const el = byId(`f_${name}`);
+      if (!el) return;
+      if (el.dataset.multiselect === '1' && Array.isArray(value)) {
+        const values = value.map(String);
+        for (const opt of el.options) opt.selected = values.includes(opt.value);
+        return;
+      }
+      if (el.type === 'checkbox') {
+        el.checked = !!value;
+        return;
+      }
+      el.value = value != null ? String(value) : '';
+    },
+    async reloadFieldOptions(name, options = {}) {
+      const stored = fieldContexts.get(name);
+      if (!stored) return;
+      const { field, element } = stored;
+      const preserve = options.preserveSelection !== false;
+      let previous;
+      if (preserve) {
+        previous = element.dataset.multiselect === '1'
+          ? Array.from(element.selectedOptions).map((opt) => opt.value)
+          : element.value;
+      }
+      await populateOptions(field, element, { preserveSelection: preserve });
+      if (preserve && previous != null) {
+        if (Array.isArray(previous)) {
+          for (const opt of element.options) opt.selected = previous.includes(opt.value);
+        } else {
+          element.value = previous;
+        }
+      }
+    },
+    log,
+  };
+  const pendingReloads = new Set();
+  function buildEnhancedFromSelect(selectEl, field) {
+    const isMulti = !!selectEl.multiple;
+    const wrap = document.createElement('div');
+    wrap.className = 'enh-select';
+    const control = document.createElement('div');
+    control.className = 'enh-control';
+    const pills = document.createElement('div');
+    pills.className = 'enh-pills';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = field.placeholder || 'Search…';
+    input.className = 'enh-input';
+    const dropdown = document.createElement('div');
+    dropdown.className = 'enh-dropdown';
+    const list = document.createElement('ul');
+    dropdown.appendChild(list);
+    control.appendChild(pills);
+    control.appendChild(input);
+    wrap.appendChild(control);
+    wrap.appendChild(dropdown);
+    selectEl.style.display = 'none';
+    selectEl.parentNode.insertBefore(wrap, selectEl.nextSibling);
+
+    function getOptions() {
+      return Array.from(selectEl.options).map(o => ({ value: o.value, label: o.textContent, disabled: o.disabled, selected: o.selected }));
+    }
+    function syncFromSelect() {
+      const opts = getOptions();
+      // pills
+      pills.innerHTML = '';
+      if (isMulti && field.showPills) {
+        for (const o of opts.filter(o => o.selected)) {
+          const chip = document.createElement('span');
+          chip.className = 'enh-pill';
+          chip.textContent = o.label;
+          const x = document.createElement('button');
+          x.type = 'button'; x.className = 'enh-pill-x'; x.textContent = '×';
+          x.addEventListener('click', () => {
+            for (const optEl of selectEl.options) if (optEl.value === o.value) optEl.selected = false;
+            updateListChecks();
+            selectEl.dispatchEvent(new Event('input', { bubbles: true }));
+            syncFromSelect();
+          });
+          chip.appendChild(x);
+          pills.appendChild(chip);
+        }
+      }
+      // single selection placeholder
+      if (!isMulti && field.searchable) {
+        const sel = opts.find(o => o.selected);
+        input.value = sel ? sel.label : '';
+      }
+    }
+    function updateListChecks() {
+      const opts = getOptions();
+      const q = input.value.trim().toLowerCase();
+      list.innerHTML = '';
+      for (const o of opts) {
+        if (q && !o.label.toLowerCase().includes(q)) continue;
+        const li = document.createElement('li');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'enh-item';
+        btn.disabled = !!o.disabled;
+        if (isMulti && field.checkboxes) {
+          const cb = document.createElement('input');
+          cb.type = 'checkbox'; cb.checked = !!o.selected; cb.disabled = !!o.disabled;
+          cb.addEventListener('click', (e) => { e.preventDefault(); });
+          btn.appendChild(cb);
+        }
+        const span = document.createElement('span');
+        span.textContent = o.label;
+        btn.appendChild(span);
+        btn.addEventListener('click', () => {
+          if (isMulti) {
+            for (const optEl of selectEl.options) if (optEl.value === o.value) optEl.selected = !optEl.selected;
+          } else {
+            for (const optEl of selectEl.options) optEl.selected = (optEl.value === o.value);
+            dropdown.classList.remove('open');
+          }
+          selectEl.dispatchEvent(new Event('input', { bubbles: true }));
+          updateListChecks();
+          syncFromSelect();
+        });
+        li.appendChild(btn);
+        list.appendChild(li);
+      }
+    }
+    function open() { dropdown.classList.add('open'); input.focus(); }
+    function close() { dropdown.classList.remove('open'); }
+    control.addEventListener('click', (e) => {
+      if (!dropdown.classList.contains('open')) open(); else close();
+      e.stopPropagation();
+    });
+    input.addEventListener('input', () => updateListChecks());
+    document.addEventListener('click', () => close());
+    wrap.addEventListener('click', (e) => e.stopPropagation());
+
+    // expose rebuild hook
+    selectEl._enhancedRebuild = () => { updateListChecks(); syncFromSelect(); };
+    selectEl.addEventListener('change', () => selectEl._enhancedRebuild());
+    selectEl.addEventListener('input', () => selectEl._enhancedRebuild());
+    // initial
+    updateListChecks();
+    syncFromSelect();
+  }
+  async function populateOptions(field, selectEl, extra = {}) {
+    const loader = field.loadOptions;
+    if (!loader) return;
+    const key = field.name;
+    if (pendingReloads.has(key)) return;
+    pendingReloads.add(key);
+    selectEl.disabled = true;
+    selectEl.innerHTML = '';
+    const loading = document.createElement('option');
+    loading.textContent = 'Loading…';
+    loading.value = '';
+    selectEl.appendChild(loading);
+    try {
+      const opts = await loader(context);
+      selectEl.innerHTML = '';
+      for (const opt of opts || []) {
+        const o = document.createElement('option');
+        o.value = opt.value;
+        o.textContent = opt.label;
+        if (opt.disabled) o.disabled = true;
+        selectEl.appendChild(o);
+      }
+      if (extra.preserveSelection === false) {
+        selectEl.selectedIndex = -1;
+      }
+      const def = field.default;
+      if (field.type === 'multiselect') {
+        const values = Array.isArray(def) ? def.map(String) : [];
+        for (const opt of selectEl.options) opt.selected = values.includes(opt.value);
+      } else if (def != null && selectEl.value === '') {
+        selectEl.value = String(def);
+      }
+      if (typeof selectEl._enhancedRebuild === 'function') {
+        selectEl._enhancedRebuild();
+      }
+    } catch (e) {
+      log.err(`Failed loading options for ${field.label}: ${e?.message || e}`);
+      selectEl.innerHTML = '';
+      const fail = document.createElement('option');
+      fail.textContent = 'Failed to load';
+      fail.value = '';
+      fail.disabled = true;
+      selectEl.appendChild(fail);
+    } finally {
+      selectEl.disabled = false;
+      pendingReloads.delete(key);
+    }
+  }
   for (const f of script.fields) {
     const wrap = document.createElement('div');
     wrap.style.marginBottom = '8px';
@@ -301,144 +695,114 @@ function renderScriptForm(script) {
         el = document.createElement('textarea');
         break;
       case 'select':
+      case 'multiselect': {
         el = document.createElement('select');
+        if (f.type === 'multiselect') {
+          el.multiple = true;
+          el.dataset.multiselect = '1';
+        }
         for (const opt of f.options || []) {
           const o = document.createElement('option');
-          o.value = opt.value; o.textContent = opt.label; el.appendChild(o);
+          o.value = opt.value;
+          o.textContent = opt.label;
+          if (opt.disabled) o.disabled = true;
+          el.appendChild(o);
+        }
+        // Enhance select UI if requested
+        if (f.searchable || f.checkboxes || f.showPills) {
+          // Build enhanced UI after the element is in the DOM
+          queueMicrotask(() => buildEnhancedFromSelect(el, f));
         }
         break;
+      }
       case 'checkbox':
         el = document.createElement('input'); el.type = 'checkbox'; break;
       case 'number':
         el = document.createElement('input'); el.type = 'number'; break;
+      case 'button':
+        el = document.createElement('button');
+        el.type = 'button';
+        el.textContent = f.label || 'Action';
+        el.dataset.buttonField = '1';
+        label.textContent = '';
+        label.style.display = 'none';
+        break;
       default:
         el = document.createElement('input'); el.type = 'text';
     }
     el.id = `f_${f.name}`;
-    if (f.placeholder) el.placeholder = f.placeholder;
-    if (f.type === 'checkbox') el.checked = !!f.default; else if (f.default != null) el.value = String(f.default);
+    if (f.placeholder && el.tagName !== 'BUTTON') el.placeholder = f.placeholder;
+    if (f.type === 'checkbox') el.checked = !!f.default;
+    else if (Array.isArray(f.default) && el.dataset.multiselect === '1') {
+      const defaults = f.default.map(String);
+      for (const opt of el.options) opt.selected = defaults.includes(opt.value);
+    }
+    else if (f.default != null && f.type !== 'textarea' && el.tagName !== 'BUTTON') el.value = String(f.default);
     wrap.appendChild(el);
-    container.appendChild(wrap);
+    frag.appendChild(wrap);
+    // Any change to a script field invalidates prior preview
+    const invalidate = () => setRunEnabled(false);
+    const evt = f.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(evt, invalidate);
+    if (f.loadOptions) {
+      fieldContexts.set(f.name, { field: f, element: el });
+      if (f.autoLoad !== false) {
+        populateOptions(f, el, { preserveSelection: true });
+      }
+    }
+    if (f.type === 'button' && typeof f.onClick === 'function') {
+      el.addEventListener('click', async () => {
+        try {
+          setRunEnabled(false);
+          await f.onClick(context);
+        } catch (e) {
+          log.err(e?.message || String(e));
+        }
+      });
+    }
+  }
+  container.appendChild(frag);
+  for (const f of script.fields) {
+    if (!Array.isArray(f.reloadOn) || !f.reloadOn.length) continue;
+    const targetEl = byId(`f_${f.name}`);
+    if (!targetEl) continue;
+    const handler = () => populateOptions(f, targetEl, { preserveSelection: false });
+    for (const dep of f.reloadOn) {
+      const depEl = byId(`f_${dep}`);
+      if (!depEl) continue;
+      const evt = depEl.type === 'checkbox' ? 'change' : 'input';
+      depEl.addEventListener(evt, handler);
+    }
   }
 }
 
 function readForm(script) {
   const out = {};
   for (const f of script.fields) {
+    if (f.type === 'button') continue;
     const el = byId(`f_${f.name}`);
     if (!el) continue;
     let v;
-    if (f.type === 'checkbox') v = !!el.checked;
+    if (el.dataset.multiselect === '1') v = Array.from(el.selectedOptions || []).map((opt) => opt.value);
+    else if (f.type === 'checkbox') v = !!el.checked;
     else if (f.type === 'number') v = Number(el.value);
     else v = el.value;
-    if (f.required && (v === '' || v == null || Number.isNaN(v))) throw new Error(`Field required: ${f.label}`);
+    if (f.required) {
+      const empty = el.dataset.multiselect === '1' ? (Array.isArray(v) && v.length === 0) : (v === '' || v == null || Number.isNaN(v));
+      if (empty) throw new Error(`Field required: ${f.label}`);
+    }
     out[f.name] = v;
   }
   return out;
 }
 
-// Example Scripts
-registerScripts([
-  {
-    id: 'users_tag',
-    name: 'Users: add tag to all matching',
-    fields: [
-      { type: 'text', name: 'listPath', label: 'List users path', default: '/v1/users', required: true },
-      { type: 'text', name: 'match', label: 'Email contains', default: '', placeholder: 'example.com' },
-      { type: 'text', name: 'tag', label: 'Tag to add', required: true },
-      { type: 'text', name: 'updatePath', label: 'Update path', default: '/v1/users/{id}/tags', required: true },
-    ],
-    async preview(cfg, ctx) {
-      const url = resolveUrl(cfg.listPath);
-      const res = await ctx.request({ method: 'GET', url });
-      const items = Array.isArray(res.body) ? res.body : (res.body?.items || []);
-      log.info(`Preview users: showing up to 5 of ${items.length}`);
-      log.info(JSON.stringify(items.slice(0, 5), null, 2));
-      return items.slice(0, 5);
-    },
-    async plan(cfg, ctx) {
-      const url = resolveUrl(cfg.listPath);
-      const res = await ctx.request({ method: 'GET', url });
-      const users = Array.isArray(res.body) ? res.body : (res.body?.items || []);
-      const match = (cfg.match || '').toLowerCase();
-      const filtered = match ? users.filter(u => String(u.email||'').toLowerCase().includes(match)) : users;
-      const items = filtered.map(u => ({ id: u.id, email: u.email }));
-      log.ok(`Plan ready: ${items.length} users to process`);
-      return items;
-    },
-    async execute(item, cfg, ctx) {
-      const path = (cfg.updatePath || '').replace('{id}', encodeURIComponent(item.id));
-      const url = resolveUrl(path);
-      if (state.cfg.dryRun) {
-        log.info(`Would tag user ${item.id} (${item.email}) with "${cfg.tag}"`);
-        return;
-      }
-      const body = { add: [cfg.tag] };
-      const res = await fetchWithBackoff(() => ctx.request({ method: 'POST', url, headers: { 'Content-Type': 'application/json' }, body }), 4, { signal: ctx.signal });
-      if (res.status >= 200 && res.status < 300) log.ok(`Tagged ${item.id}`); else throw new Error(`HTTP ${res.status}`);
-    },
-  },
-  {
-    id: 'csv_post',
-    name: 'Custom: POST each row from CSV',
-    fields: [
-      { type: 'text', name: 'endpoint', label: 'Endpoint', default: '/v1/ingest', required: true },
-      { type: 'textarea', name: 'csv', label: 'CSV (with header)', required: true, placeholder: 'id,email\n1,a@example.com' },
-    ],
-    async preview(cfg, ctx) {
-      const rows = parseCSV(cfg.csv || '');
-      log.info(`CSV rows: ${rows.length}`);
-      log.info(JSON.stringify(rows.slice(0, 3), null, 2));
-      return rows.slice(0, 3);
-    },
-    async plan(cfg, ctx) {
-      const rows = parseCSV(cfg.csv || '');
-      log.ok(`Plan ready: ${rows.length} rows`);
-      return rows;
-    },
-    async execute(item, cfg, ctx) {
-      const url = resolveUrl(cfg.endpoint);
-      if (state.cfg.dryRun) { log.info(`Would POST: ${JSON.stringify(item)}`); return; }
-      const res = await fetchWithBackoff(() => ctx.request({ method: 'POST', url, headers: { 'Content-Type': 'application/json' }, body: item, signal: ctx.signal }), 4, { signal: ctx.signal });
-      if (res.status >= 200 && res.status < 300) log.ok(`Posted`); else throw new Error(`HTTP ${res.status}`);
-    },
-  },
-]);
-
-function parseCSV(text) {
-  const lines = (text || '').replace(/\r/g, '').split('\n').filter(l => l.trim() !== '');
-  if (lines.length === 0) return [];
-  const header = splitCSVLine(lines[0]);
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cols = splitCSVLine(lines[i]);
-    const obj = {};
-    for (let j = 0; j < header.length; j++) obj[header[j]] = cols[j] ?? '';
-    rows.push(obj);
-  }
-  return rows;
-}
-
-function splitCSVLine(line) {
-  const out = [];
-  let cur = '';
-  let inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQ) {
-      if (ch === '"') {
-        if (line[i+1] === '"') { cur += '"'; i++; }
-        else inQ = false;
-      } else cur += ch;
-    } else {
-      if (ch === ',') { out.push(cur); cur = ''; }
-      else if (ch === '"') inQ = true;
-      else cur += ch;
-    }
-  }
-  out.push(cur);
-  return out.map(s => s.trim());
-}
+registerPermissionReassign({
+  registerScripts,
+  resolveUrl,
+  fetchWithBackoff,
+  log,
+  state,
+});
 
 // 4.6 Runner
 async function runBatches(items, perItemFn, { concurrency = 4, signal, onProgress } = {}) {
@@ -472,7 +836,34 @@ async function onPreview() {
   const script = getCurrentScript(); if (!script) return;
   try {
     const cfg = readForm(script);
-    await script.preview(cfg, { request: proxyRequest });
+    clearRunDetail();
+    setRunSummary('Running preview…');
+    const sLog = createScriptLog({ mirrorLevels: ['warn', 'err'] });
+    const t0 = performance.now();
+    const prev = await script.preview(cfg, { request: proxyRequest, resolveUrl, fetchWithBackoff, state, log: sLog });
+    const items = Array.isArray(prev) ? prev : (prev?.items || []);
+    const scanned = typeof prev?.scanned === 'number' ? prev.scanned : undefined;
+    const t1 = performance.now();
+    const ms = Math.round(t1 - t0);
+    const count = Array.isArray(items) ? items.length : 0;
+    const scannedPart = scanned != null ? `${scanned} users scanned. ` : '';
+    setRunSummary(`${scannedPart}${count} user${count === 1 ? '' : 's'} have target permission bundle(s) to be updated. (${ms} ms)`);
+    // Also print a friendly, user-focused summary list for the first N items
+    if (Array.isArray(items) && items.length) {
+      const header = 'What will change (sample):';
+      const lines = [];
+      const sample = items.slice(0, 50);
+      for (const item of sample) {
+        const who = item.email || item.name || `User ${item.id}`;
+        const current = Array.isArray(item.summary?.current) ? item.summary.current.join(', ') : 'none';
+        const next = Array.isArray(item.summary?.next) ? item.summary.next.join(', ') : 'none';
+        lines.push(`• ${who}\n    Current: ${current}\n    After:   ${next}`);
+      }
+      if (items.length > sample.length) lines.push(`… and ${items.length - sample.length} more users`);
+      appendRunDetail([header, '', ...lines].join('\n'));
+    }
+    // Preview succeeded; enable run
+    setRunEnabled(true);
   } catch (e) { log.err(e?.message || String(e)); }
 }
 
@@ -481,7 +872,19 @@ async function onRun() {
   const cfg = readForm(script);
   log.info(`Planning…`);
   let items = [];
-  try { items = await script.plan(cfg, { request: proxyRequest }); }
+  try {
+    clearRunDetail();
+    setRunSummary('Planning…');
+    const sLog = createScriptLog({ mirrorLevels: ['warn', 'err'] });
+    const t0 = performance.now();
+    const planRes = await script.plan(cfg, { request: proxyRequest, resolveUrl, fetchWithBackoff, state, log: sLog });
+    const scanned = typeof planRes?.scanned === 'number' ? planRes.scanned : undefined;
+    items = Array.isArray(planRes) ? planRes : (planRes?.items || []);
+    const t1 = performance.now();
+    const ms = Math.round(t1 - t0);
+    const scannedPart = scanned != null ? `${scanned} users scanned. ` : '';
+    setRunSummary(`${scannedPart}${items.length} item${items.length === 1 ? '' : 's'} planned in ${ms} ms.`);
+  }
   catch (e) { log.err(e?.message || String(e)); return; }
   const conc = Math.max(1, Number(state.cfg.concurrency) || 4);
   const chunkSize = Math.max(1, Number(state.cfg.chunkSize) || items.length);
@@ -495,14 +898,19 @@ async function onRun() {
     byId('r_fail').textContent = String(p.fail);
     byId('r_prog').value = progress.total ? Math.round((p.done / progress.total) * 100) : 0;
   };
-  const perItem = (item) => script.execute(item, cfg, { request: proxyRequest, signal: currentController.signal });
+  const sLogExec = createScriptLog({ mirrorLevels: ['warn', 'err'] });
+  const tStart = performance.now();
+  const perItem = (item) => script.execute(item, cfg, { request: proxyRequest, resolveUrl, fetchWithBackoff, signal: currentController.signal, state, log: sLogExec });
   try {
     for (let i = 0; i < items.length; i += chunkSize) {
       const chunk = items.slice(i, i + chunkSize);
       await runBatches(chunk, perItem, { concurrency: conc, signal: currentController.signal, onProgress });
       if (currentController.signal.aborted) throw new DOMException('Aborted', 'AbortError');
     }
+    const tEnd = performance.now();
+    const ms = Math.round(tEnd - tStart);
     log.ok('Run completed');
+    setRunSummary(`Run completed in ${ms} ms. Processed ${progress.done}, success ${progress.ok}, failed ${progress.fail}.`);
   } catch (e) {
     if (e?.name === 'AbortError') log.warn('Run cancelled'); else log.err(e?.message || String(e));
   } finally {
@@ -519,15 +927,86 @@ function byId(id) { return document.getElementById(id); }
 
 function bindUI() {
   logger.viewEl = byId('log_view');
-  byId('cfg_save').addEventListener('click', saveCfg);
-  byId('cfg_clear').addEventListener('click', clearCfg);
+  byId('cfg_save').addEventListener('click', () => { setRunEnabled(false); saveCfg(); });
+  byId('cfg_clear').addEventListener('click', () => { setRunEnabled(false); clearCfg(); });
   byId('log_download').addEventListener('click', downloadLogs);
+  const tokenEl = byId('cfg_token');
+  const toggleBtn = byId('cfg_token_toggle');
+  if (tokenEl && toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      const isHidden = tokenEl.type === 'password';
+      tokenEl.type = isHidden ? 'text' : 'password';
+      toggleBtn.textContent = isHidden ? 'Hide' : 'Show';
+      toggleBtn.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+      try {
+        tokenEl.focus({ preventScroll: true });
+      } catch {
+        tokenEl.focus();
+      }
+      if (tokenEl.type === 'text' && typeof tokenEl.setSelectionRange === 'function') {
+        const pos = tokenEl.value.length;
+        try {
+          tokenEl.setSelectionRange(pos, pos);
+        } catch {}
+      }
+    });
+  }
 
   byId('c_send').addEventListener('click', handleSend);
-  byId('s_pick').addEventListener('change', () => renderScriptForm(getCurrentScript()));
+  byId('s_pick').addEventListener('change', () => { setRunEnabled(false); renderScriptForm(getCurrentScript()); });
   byId('s_preview').addEventListener('click', onPreview);
   byId('s_run').addEventListener('click', onRun);
   byId('s_cancel').addEventListener('click', onCancel);
+
+  // Invalidate run when connection settings change
+  const cfgIds = ['cfg_base','cfg_token','cfg_persist','cfg_conc','cfg_chunk'];
+  for (const id of cfgIds) {
+    const el = byId(id);
+    if (!el) continue;
+    const ev = el.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(ev, () => setRunEnabled(false));
+  }
+
+  // Tabs
+  const tabs = [
+    { btn: byId('tab_conn'), panel: byId('panel_conn') },
+    { btn: byId('tab_console'), panel: byId('panel_console') },
+    { btn: byId('tab_scripts'), panel: byId('panel_scripts') },
+  ];
+  function activateTab(targetBtn) {
+    for (const { btn, panel } of tabs) {
+      const active = btn === targetBtn;
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      if (active) {
+        panel.removeAttribute('hidden');
+        panel.setAttribute('tabindex', '0');
+      } else {
+        panel.setAttribute('hidden', '');
+        panel.setAttribute('tabindex', '-1');
+      }
+    }
+  }
+  for (const { btn } of tabs) {
+    if (!btn) continue;
+    btn.addEventListener('click', () => activateTab(btn));
+    btn.addEventListener('keydown', (e) => {
+      // Arrow key navigation between tabs
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const idx = tabs.findIndex(t => t.btn === btn);
+      if (idx === -1) return;
+      const nextIdx = e.key === 'ArrowRight' ? (idx + 1) % tabs.length : (idx - 1 + tabs.length) % tabs.length;
+      const nextBtn = tabs[nextIdx].btn;
+      nextBtn.focus();
+      activateTab(nextBtn);
+    });
+  }
+
+  // Initialize JSON editors (headers, body)
+  initJsonEditor('c_headers');
+  initJsonEditor('c_body');
+  // Start with Run disabled until preview
+  setRunEnabled(false);
 }
 
 // Init
@@ -536,6 +1015,28 @@ window.addEventListener('DOMContentLoaded', () => {
   bindUI();
   renderScriptPicker();
   byId('c_method').value = 'GET';
+  // Seed placeholders for JSON editors if empty
+  const headersEl = byId('c_headers');
+  const bodyEl = byId('c_body');
+  const headersEd = editors['c_headers'];
+  const bodyEd = editors['c_body'];
+  try {
+    if (headersEl && headersEd && !headersEd.get()) headersEd.set(headersEl.dataset.placeholder || '');
+  } catch {}
+  try {
+    if (bodyEl && bodyEd && !bodyEd.get()) bodyEd.set(bodyEl.dataset.placeholder || '');
+  } catch {}
   log.info('Ready');
+  // Ensure default tab is active
+  const defaultTab = byId('tab_conn');
+  if (defaultTab) defaultTab.click();
 });
+
+// Enable/disable Run button helper
+function setRunEnabled(enabled) {
+  try {
+    const btn = byId('s_run');
+    if (btn) btn.disabled = !enabled;
+  } catch {}
+}
 
