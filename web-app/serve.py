@@ -10,8 +10,7 @@ app = Flask(__name__, static_folder=APP_DIR, static_url_path="")
 
 # Edit per environment
 ALLOWED_HOSTS = [
-    "api.saas.tld",
-    "sandbox.saas.tld",
+    "*.tractionguest.com",
 ]
 
 SENSITIVE = re.compile(r"(?i)authorization|api[-_ ]?key|x-api-key|token|secret")
@@ -77,8 +76,24 @@ def proxy():
     u = urlparse(url)
     if u.scheme not in ("https", "http") or not u.netloc:
         return jsonify({"error": "Invalid URL"}), 400
-    if ALLOWED_HOSTS and (u.hostname or "").lower() not in {h.lower() for h in ALLOWED_HOSTS}:
-        return jsonify({"error": f"Host not allowed: {u.hostname}"}), 400
+    if ALLOWED_HOSTS:
+        hostname = (u.hostname or "").lower()
+        allowed = False
+        for allowed_host in ALLOWED_HOSTS:
+            allowed_host_lower = allowed_host.lower()
+            if allowed_host_lower.startswith("*."):
+                # Wildcard pattern: check if hostname ends with the domain part
+                domain = allowed_host_lower[2:]  # Remove "*."
+                if hostname.endswith("." + domain) or hostname == domain:
+                    allowed = True
+                    break
+            else:
+                # Exact match
+                if hostname == allowed_host_lower:
+                    allowed = True
+                    break
+        if not allowed:
+            return jsonify({"error": f"Host not allowed: {u.hostname}"}), 400
 
     # Never log sensitive headers
     safe_hdrs = {k: v for k, v in headers.items() if not SENSITIVE.search(k)}
