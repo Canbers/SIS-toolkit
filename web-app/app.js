@@ -681,6 +681,202 @@ async function renderScriptForm(script) {
       pendingReloads.delete(key);
     }
   }
+  // Special layout for permission reassign script: emphasize Target -> Replacement and hide advanced by default
+  if (script.id === 'perm_reassign') {
+    const byName = Object.fromEntries(script.fields.map(f => [f.name, f]));
+    const fetchBtnField = byName.fetchBundles;
+    const targetField = byName.targetBundles;
+    const replacementField = byName.replacementBundle;
+
+    // Optional: fetch button stays visible (not an advanced config)
+    if (fetchBtnField) {
+      const wrap = document.createElement('div');
+      wrap.style.marginBottom = '8px';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = `f_${fetchBtnField.name}`;
+      btn.textContent = fetchBtnField.label || 'Fetch';
+      btn.dataset.buttonField = '1';
+      wrap.appendChild(btn);
+      frag.appendChild(wrap);
+      if (typeof fetchBtnField.onClick === 'function') {
+        btn.addEventListener('click', async () => {
+          try {
+            setRunEnabled(false);
+            await fetchBtnField.onClick(context);
+          } catch (e) { log.err(e?.message || String(e)); }
+        });
+      }
+    }
+
+    // Explanatory text
+    const explain = document.createElement('div');
+    explain.className = 'callout';
+    explain.innerHTML = '<strong>How this works:</strong> All users who have any of the Target bundles will have those bundle(s) removed and will instead be assigned the Replacement bundle. If a user also has other bundle(s) that are not selected as Target, those non‑target bundles stay as they are.';
+    frag.appendChild(explain);
+
+    // Main split layout: Target → Replacement
+    const split = document.createElement('div');
+    split.style.display = 'grid';
+    split.style.gap = '16px 20px';
+    split.style.gridTemplateColumns = 'minmax(0,1fr) auto minmax(0,1fr)';
+    split.style.alignItems = 'start';
+
+    // Left: Target bundles (multiselect)
+    if (targetField) {
+      const left = document.createElement('div');
+      left.className = 'field';
+      const lab = document.createElement('label');
+      lab.textContent = targetField.label + (targetField.required ? ' *' : '');
+      lab.htmlFor = `f_${targetField.name}`;
+      const sel = document.createElement('select');
+      sel.id = `f_${targetField.name}`;
+      sel.multiple = true;
+      sel.dataset.multiselect = '1';
+      if (Array.isArray(targetField.options)) {
+        for (const opt of targetField.options) {
+          const o = document.createElement('option');
+          o.value = opt.value; o.textContent = opt.label; if (opt.disabled) o.disabled = true; sel.appendChild(o);
+        }
+      }
+      left.appendChild(lab);
+      left.appendChild(sel);
+      split.appendChild(left);
+      const invalidate = () => setRunEnabled(false);
+      sel.addEventListener('input', invalidate);
+      fieldContexts.set(targetField.name, { field: targetField, element: sel });
+      if (targetField.searchable || targetField.checkboxes || targetField.showPills) {
+        queueMicrotask(() => buildEnhancedFromSelect(sel, targetField));
+      }
+      if (targetField.loadOptions && targetField.autoLoad !== false) {
+        populateOptions(targetField, sel, { preserveSelection: true });
+      }
+    }
+
+    // Middle: Arrow
+    const mid = document.createElement('div');
+    mid.setAttribute('aria-hidden', 'true');
+    mid.style.alignSelf = 'center';
+    mid.style.fontSize = '28px';
+    mid.style.opacity = '0.6';
+    mid.style.textAlign = 'center';
+    mid.style.padding = '10px 0';
+    mid.textContent = '→';
+    split.appendChild(mid);
+
+    // Right: Replacement bundle (single select)
+    if (replacementField) {
+      const right = document.createElement('div');
+      right.className = 'field';
+      const lab = document.createElement('label');
+      lab.textContent = replacementField.label + (replacementField.required ? ' *' : '');
+      lab.htmlFor = `f_${replacementField.name}`;
+      const sel = document.createElement('select');
+      sel.id = `f_${replacementField.name}`;
+      if (Array.isArray(replacementField.options)) {
+        for (const opt of replacementField.options) {
+          const o = document.createElement('option');
+          o.value = opt.value; o.textContent = opt.label; if (opt.disabled) o.disabled = true; sel.appendChild(o);
+        }
+      }
+      right.appendChild(lab);
+      right.appendChild(sel);
+      split.appendChild(right);
+      const invalidate = () => setRunEnabled(false);
+      sel.addEventListener('input', invalidate);
+      fieldContexts.set(replacementField.name, { field: replacementField, element: sel });
+      if (replacementField.searchable || replacementField.checkboxes || replacementField.showPills) {
+        queueMicrotask(() => buildEnhancedFromSelect(sel, replacementField));
+      }
+      if (replacementField.loadOptions && replacementField.autoLoad !== false) {
+        populateOptions(replacementField, sel, { preserveSelection: true });
+      }
+    }
+
+    frag.appendChild(split);
+
+    // Advanced settings collapsed by default
+    const details = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Advanced settings';
+    details.appendChild(summary);
+    const advStack = document.createElement('div');
+    advStack.className = 'stack';
+    advStack.style.marginTop = '10px';
+
+    for (const f of script.fields) {
+      if (f.name === 'fetchBundles' || f.name === 'targetBundles' || f.name === 'replacementBundle') continue;
+      const wrap = document.createElement('div');
+      wrap.style.marginBottom = '8px';
+      const label = document.createElement('label');
+      label.textContent = f.label + (f.required ? ' *' : '');
+      label.htmlFor = `f_${f.name}`;
+      wrap.appendChild(label);
+      let el;
+      switch (f.type) {
+        case 'textarea': el = document.createElement('textarea'); break;
+        case 'select':
+        case 'multiselect': {
+          el = document.createElement('select');
+          if (f.type === 'multiselect') { el.multiple = true; el.dataset.multiselect = '1'; }
+          for (const opt of f.options || []) { const o = document.createElement('option'); o.value = opt.value; o.textContent = opt.label; if (opt.disabled) o.disabled = true; el.appendChild(o); }
+          if (f.searchable || f.checkboxes || f.showPills) { queueMicrotask(() => buildEnhancedFromSelect(el, f)); }
+          break;
+        }
+        case 'checkbox': el = document.createElement('input'); el.type = 'checkbox'; break;
+        case 'number': el = document.createElement('input'); el.type = 'number'; break;
+        case 'button': {
+          el = document.createElement('button');
+          el.type = 'button';
+          el.textContent = f.label || 'Action';
+          el.dataset.buttonField = '1';
+          label.textContent = '';
+          label.style.display = 'none';
+          break;
+        }
+        default: el = document.createElement('input'); el.type = 'text';
+      }
+      el.id = `f_${f.name}`;
+      if (f.placeholder && el.tagName !== 'BUTTON') el.placeholder = f.placeholder;
+      if (f.type === 'checkbox') el.checked = !!f.default;
+      else if (Array.isArray(f.default) && el.dataset.multiselect === '1') {
+        const defaults = f.default.map(String);
+        for (const opt of el.options) opt.selected = defaults.includes(opt.value);
+      } else if (f.default != null && f.type !== 'textarea' && el.tagName !== 'BUTTON') el.value = String(f.default);
+      wrap.appendChild(el);
+      advStack.appendChild(wrap);
+      // Invalidate preview on change
+      const evt = f.type === 'checkbox' ? 'change' : 'input';
+      el.addEventListener(evt, () => setRunEnabled(false));
+      if (f.loadOptions) {
+        fieldContexts.set(f.name, { field: f, element: el });
+        if (f.autoLoad !== false) populateOptions(f, el, { preserveSelection: true });
+      }
+      if (f.type === 'button' && typeof f.onClick === 'function') {
+        el.addEventListener('click', async () => {
+          try { setRunEnabled(false); await f.onClick(context); } catch (e) { log.err(e?.message || String(e)); }
+        });
+      }
+    }
+    details.appendChild(advStack);
+    frag.appendChild(details);
+
+    container.appendChild(frag);
+    // Wire up reloadOn dependencies
+    for (const f of script.fields) {
+      if (!Array.isArray(f.reloadOn) || !f.reloadOn.length) continue;
+      const targetEl = byId(`f_${f.name}`);
+      if (!targetEl) continue;
+      const handler = () => populateOptions(f, targetEl, { preserveSelection: false });
+      for (const dep of f.reloadOn) {
+        const depEl = byId(`f_${dep}`);
+        if (!depEl) continue;
+        const evt = depEl.type === 'checkbox' ? 'change' : 'input';
+        depEl.addEventListener(evt, handler);
+      }
+    }
+    return;
+  }
   for (const f of script.fields) {
     const wrap = document.createElement('div');
     wrap.style.marginBottom = '8px';
@@ -849,7 +1045,7 @@ async function onPreview() {
     setRunSummary(`${scannedPart}${count} user${count === 1 ? '' : 's'} have target permission bundle(s) to be updated. (${ms} ms)`);
     // Also print a friendly, user-focused summary list for the first N items
     if (Array.isArray(items) && items.length) {
-      const header = 'What will change (sample):';
+      const header = 'What will change:';
       const lines = [];
       const sample = items.slice(0, 50);
       for (const item of sample) {
