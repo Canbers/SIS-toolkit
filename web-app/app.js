@@ -1,4 +1,5 @@
 import registerPermissionReassign from './scripts/permissionReassign.js';
+import registerUserGroupAssign from './scripts/userGroupAssign.js';
 
 // app.js - single-file modules: state/storage, logger, proxy client, console, scripts, runner
 
@@ -877,6 +878,228 @@ async function renderScriptForm(script) {
     }
     return;
   }
+
+  // Special layout for user group assign script: conditional fields based on mode, collapsible advanced
+  if (script.id === 'user_group_assign') {
+    const byName = Object.fromEntries(script.fields.map(f => [f.name, f]));
+    
+    // Fetch button at top
+    const fetchBtnField = byName.refreshOptions;
+    if (fetchBtnField) {
+      const wrap = document.createElement('div');
+      wrap.style.marginBottom = '8px';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = `f_${fetchBtnField.name}`;
+      btn.textContent = fetchBtnField.label || 'Fetch';
+      btn.dataset.buttonField = '1';
+      wrap.appendChild(btn);
+      frag.appendChild(wrap);
+      if (typeof fetchBtnField.onClick === 'function') {
+        btn.addEventListener('click', async () => {
+          try {
+            setRunEnabled(false);
+            await fetchBtnField.onClick(context);
+          } catch (e) { log.err(e?.message || String(e)); }
+        });
+      }
+    }
+
+    // Help text
+    const explain = document.createElement('div');
+    explain.className = 'callout';
+    explain.innerHTML = '<strong>How this works:</strong> Select a targeting mode (by permission bundles or by locations). Users matching your criteria will be added to the selected user group.';
+    frag.appendChild(explain);
+
+    // Mode selector
+    const modeField = byName.mode;
+    let modeSelectEl = null;
+    if (modeField) {
+      const wrap = document.createElement('div');
+      wrap.style.marginBottom = '16px';
+      const label = document.createElement('label');
+      label.textContent = modeField.label + (modeField.required ? ' *' : '');
+      label.htmlFor = `f_${modeField.name}`;
+      wrap.appendChild(label);
+      const sel = document.createElement('select');
+      sel.id = `f_${modeField.name}`;
+      for (const opt of modeField.options || []) {
+        const o = document.createElement('option');
+        o.value = opt.value;
+        o.textContent = opt.label;
+        if (opt.disabled) o.disabled = true;
+        sel.appendChild(o);
+      }
+      if (modeField.default != null) sel.value = String(modeField.default);
+      wrap.appendChild(sel);
+      frag.appendChild(wrap);
+      sel.addEventListener('input', () => setRunEnabled(false));
+      fieldContexts.set(modeField.name, { field: modeField, element: sel });
+      modeSelectEl = sel;
+    }
+
+    // Container for conditional target fields
+    const targetContainer = document.createElement('div');
+    targetContainer.style.marginBottom = '16px';
+    frag.appendChild(targetContainer);
+
+    // Target bundles field (conditional)
+    const targetBundlesField = byName.targetBundles;
+    const targetBundlesWrap = document.createElement('div');
+    targetBundlesWrap.style.marginBottom = '8px';
+    targetBundlesWrap.dataset.conditionalField = 'targetBundles';
+    if (targetBundlesField) {
+      const label = document.createElement('label');
+      label.textContent = targetBundlesField.label + (targetBundlesField.required ? ' *' : '');
+      label.htmlFor = `f_${targetBundlesField.name}`;
+      const sel = document.createElement('select');
+      sel.id = `f_${targetBundlesField.name}`;
+      sel.multiple = true;
+      sel.dataset.multiselect = '1';
+      targetBundlesWrap.appendChild(label);
+      targetBundlesWrap.appendChild(sel);
+      targetContainer.appendChild(targetBundlesWrap);
+      sel.addEventListener('input', () => setRunEnabled(false));
+      fieldContexts.set(targetBundlesField.name, { field: targetBundlesField, element: sel });
+      if (targetBundlesField.searchable || targetBundlesField.checkboxes || targetBundlesField.showPills) {
+        queueMicrotask(() => buildEnhancedFromSelect(sel, targetBundlesField));
+      }
+      if (targetBundlesField.loadOptions && targetBundlesField.autoLoad !== false) {
+        populateOptions(targetBundlesField, sel, { preserveSelection: true });
+      }
+    }
+
+    // Target locations field (conditional)
+    const targetLocationsField = byName.targetLocations;
+    const targetLocationsWrap = document.createElement('div');
+    targetLocationsWrap.style.marginBottom = '8px';
+    targetLocationsWrap.dataset.conditionalField = 'targetLocations';
+    if (targetLocationsField) {
+      const label = document.createElement('label');
+      label.textContent = targetLocationsField.label + (targetLocationsField.required ? ' *' : '');
+      label.htmlFor = `f_${targetLocationsField.name}`;
+      const sel = document.createElement('select');
+      sel.id = `f_${targetLocationsField.name}`;
+      sel.multiple = true;
+      sel.dataset.multiselect = '1';
+      targetLocationsWrap.appendChild(label);
+      targetLocationsWrap.appendChild(sel);
+      targetContainer.appendChild(targetLocationsWrap);
+      sel.addEventListener('input', () => setRunEnabled(false));
+      fieldContexts.set(targetLocationsField.name, { field: targetLocationsField, element: sel });
+      if (targetLocationsField.searchable || targetLocationsField.checkboxes || targetLocationsField.showPills) {
+        queueMicrotask(() => buildEnhancedFromSelect(sel, targetLocationsField));
+      }
+      if (targetLocationsField.loadOptions && targetLocationsField.autoLoad !== false) {
+        populateOptions(targetLocationsField, sel, { preserveSelection: true });
+      }
+    }
+
+    // Function to toggle visibility based on mode
+    function updateConditionalFields() {
+      const mode = modeSelectEl ? modeSelectEl.value : 'bundles';
+      targetBundlesWrap.style.display = mode === 'bundles' ? 'block' : 'none';
+      targetLocationsWrap.style.display = mode === 'locations' ? 'block' : 'none';
+    }
+    // Set initial state
+    updateConditionalFields();
+    // Listen to mode changes
+    if (modeSelectEl) {
+      modeSelectEl.addEventListener('change', updateConditionalFields);
+      modeSelectEl.addEventListener('input', updateConditionalFields);
+    }
+
+    // User group to assign (primary field)
+    const groupField = byName.groupId;
+    if (groupField) {
+      const wrap = document.createElement('div');
+      wrap.style.marginBottom = '16px';
+      const label = document.createElement('label');
+      label.textContent = groupField.label + (groupField.required ? ' *' : '');
+      label.htmlFor = `f_${groupField.name}`;
+      const sel = document.createElement('select');
+      sel.id = `f_${groupField.name}`;
+      wrap.appendChild(label);
+      wrap.appendChild(sel);
+      frag.appendChild(wrap);
+      sel.addEventListener('input', () => setRunEnabled(false));
+      fieldContexts.set(groupField.name, { field: groupField, element: sel });
+      if (groupField.searchable || groupField.checkboxes || groupField.showPills) {
+        queueMicrotask(() => buildEnhancedFromSelect(sel, groupField));
+      }
+      if (groupField.loadOptions && groupField.autoLoad !== false) {
+        populateOptions(groupField, sel, { preserveSelection: true });
+      }
+    }
+
+
+    // Advanced settings collapsed by default
+    const details = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Advanced settings';
+    details.appendChild(summary);
+    const advStack = document.createElement('div');
+    advStack.className = 'stack';
+    advStack.style.marginTop = '10px';
+
+    // Fields to show in advanced section
+    const advancedFields = ['limit', 'pageSize', 'listPath', 'bundlesPath', 'locationsPath', 'groupsPath', 'stopOnError'];
+    for (const fieldName of advancedFields) {
+      const f = byName[fieldName];
+      if (!f) continue;
+      const wrap = document.createElement('div');
+      wrap.style.marginBottom = '8px';
+      const label = document.createElement('label');
+      label.textContent = f.label + (f.required ? ' *' : '');
+      label.htmlFor = `f_${f.name}`;
+      wrap.appendChild(label);
+      let el;
+      switch (f.type) {
+        case 'checkbox':
+          el = document.createElement('input');
+          el.type = 'checkbox';
+          el.checked = !!f.default;
+          break;
+        case 'number':
+          el = document.createElement('input');
+          el.type = 'number';
+          if (f.default != null) el.value = String(f.default);
+          break;
+        default:
+          el = document.createElement('input');
+          el.type = 'text';
+          if (f.default != null) el.value = String(f.default);
+      }
+      el.id = `f_${f.name}`;
+      if (f.placeholder) el.placeholder = f.placeholder;
+      wrap.appendChild(el);
+      advStack.appendChild(wrap);
+      const evt = f.type === 'checkbox' ? 'change' : 'input';
+      el.addEventListener(evt, () => setRunEnabled(false));
+      fieldContexts.set(f.name, { field: f, element: el });
+    }
+
+    details.appendChild(advStack);
+    frag.appendChild(details);
+
+    container.appendChild(frag);
+
+    // Wire up reloadOn dependencies
+    for (const f of script.fields) {
+      if (!Array.isArray(f.reloadOn) || !f.reloadOn.length) continue;
+      const targetEl = byId(`f_${f.name}`);
+      if (!targetEl) continue;
+      const handler = () => populateOptions(f, targetEl, { preserveSelection: false });
+      for (const dep of f.reloadOn) {
+        const depEl = byId(`f_${dep}`);
+        if (!depEl) continue;
+        const evt = depEl.type === 'checkbox' ? 'change' : 'input';
+        depEl.addEventListener(evt, handler);
+      }
+    }
+    return;
+  }
+
   for (const f of script.fields) {
     const wrap = document.createElement('div');
     wrap.style.marginBottom = '8px';
@@ -999,6 +1222,14 @@ registerPermissionReassign({
   state,
 });
 
+registerUserGroupAssign({
+  registerScripts,
+  resolveUrl,
+  fetchWithBackoff,
+  log,
+  state,
+});
+
 // 4.6 Runner
 async function runBatches(items, perItemFn, { concurrency = 4, signal, onProgress } = {}) {
   const total = items.length;
@@ -1042,7 +1273,19 @@ async function onPreview() {
     const ms = Math.round(t1 - t0);
     const count = Array.isArray(items) ? items.length : 0;
     const scannedPart = scanned != null ? `${scanned} users scanned. ` : '';
-    setRunSummary(`${scannedPart}${count} user${count === 1 ? '' : 's'} have target permission bundle(s) to be updated. (${ms} ms)`);
+    
+    // Script-specific summary text
+    let summaryText = `${scannedPart}${count} user${count === 1 ? '' : 's'}`;
+    if (script.id === 'perm_reassign') {
+      summaryText += ' have target permission bundle(s) to be updated.';
+    } else if (script.id === 'user_group_assign') {
+      summaryText += ' will be added to the selected user group.';
+    } else {
+      summaryText += ' queued for processing.';
+    }
+    summaryText += ` (${ms} ms)`;
+    setRunSummary(summaryText);
+    
     // Also print a friendly, user-focused summary list for the first N items
     if (Array.isArray(items) && items.length) {
       const header = 'What will change:';
@@ -1050,9 +1293,24 @@ async function onPreview() {
       const sample = items.slice(0, 50);
       for (const item of sample) {
         const who = item.email || item.name || `User ${item.id}`;
-        const current = Array.isArray(item.summary?.current) ? item.summary.current.join(', ') : 'none';
-        const next = Array.isArray(item.summary?.next) ? item.summary.next.join(', ') : 'none';
-        lines.push(`• ${who}\n    Current: ${current}\n    After:   ${next}`);
+        
+        // Handle different summary structures
+        if (script.id === 'perm_reassign') {
+          const current = Array.isArray(item.summary?.current) ? item.summary.current.join(', ') : 'none';
+          const next = Array.isArray(item.summary?.next) ? item.summary.next.join(', ') : 'none';
+          lines.push(`• ${who}\n    Current: ${current}\n    After:   ${next}`);
+        } else if (script.id === 'user_group_assign') {
+          const matchBy = item.summary?.match?.by || 'criteria';
+          const matchCurrent = Array.isArray(item.summary?.match?.current) ? item.summary.match.current.join(', ') : 'none';
+          const groupCurrent = Array.isArray(item.summary?.group?.current) ? item.summary.group.current.join(', ') : 'none';
+          const groupNext = Array.isArray(item.summary?.group?.next) ? item.summary.group.next.join(', ') : 'none';
+          lines.push(`• ${who}\n    Matched by ${matchBy}: ${matchCurrent}\n    Current groups: ${groupCurrent}\n    After:          ${groupNext}`);
+        } else {
+          // Generic fallback
+          const current = Array.isArray(item.summary?.current) ? item.summary.current.join(', ') : 'none';
+          const next = Array.isArray(item.summary?.next) ? item.summary.next.join(', ') : 'none';
+          lines.push(`• ${who}\n    Current: ${current}\n    After:   ${next}`);
+        }
       }
       if (items.length > sample.length) lines.push(`… and ${items.length - sample.length} more users`);
       appendRunDetail([header, '', ...lines].join('\n'));

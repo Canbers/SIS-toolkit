@@ -6,11 +6,28 @@ Simple, no-install web tools for working with SIS-related tasks. A production in
 
 - Visit: [sis.canby.ca](https://sis.canby.ca)
 
+### Available Scripts
+
+The toolkit includes two main bulk operation scripts:
+
+#### 1. Users: reassign permission bundles
+- **Purpose**: Replace permission bundles for users who have specific target bundles
+- **How it works**: Finds all users with any of the selected target bundles, removes those bundles, and assigns them a replacement bundle instead
+- **Use case**: Migrating users from old permission bundles to new ones
+
+#### 2. Users: assign user group (by bundles or locations)
+- **Purpose**: Add users to a user group based on their permission bundles or locations
+- **How it works**: 
+  - **By bundles**: Finds users who have any of the selected permission bundles and adds them to the chosen user group
+  - **By locations**: Finds users who have any of the selected locations and adds them to the chosen user group
+- **Use case**: Organizing users into groups for access control, notifications, or reporting
+
 ### What's in this repo
 
 - `web-app/index.html` — The single-page UI.
 - `web-app/app.js` — Main client-side logic.
 - `web-app/scripts/permissionReassign.js` — Helper script for bulk permission reassignment.
+- `web-app/scripts/userGroupAssign.js` — Helper script for assigning users to user groups.
 - `web-app/serve.py` — Tiny Flask server used for local development and a safe HTTP proxy for API calls.
 
 ### Quick start (local)
@@ -63,5 +80,7 @@ Apache License 2.0 — see `LICENSE` for details.
 ### Contributing
 
 Issues and pull requests are welcome. Please keep contributions small and focused.
+
+**Adding new scripts**: The toolkit supports custom script UIs through the hybrid approach in `app.js`. Each script can define its own fields and custom UI layout. See the existing scripts in `web-app/scripts/` for examples.
 
 
