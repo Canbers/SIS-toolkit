@@ -8,14 +8,14 @@ The toolkit includes two main bulk operation scripts:
 #### 1. Users: reassign permission bundles
 - **Purpose**: Replace permission bundles for users who have specific target bundles
 - **How it works**: Finds all users with any of the selected target bundles, removes those bundles, and assigns them a replacement bundle instead
-- **Use case**: Migrating users from old permission bundles to new ones
+- **Use case**: Migrating users from old permission bundles to new consolidated ones
 
 #### 2. Users: assign user group (by bundles or locations)
 - **Purpose**: Add users to a user group based on their permission bundles or locations
 - **How it works**: 
   - **By bundles**: Finds users who have any of the selected permission bundles and adds them to the chosen user group
   - **By locations**: Finds users who have any of the selected locations and adds them to the chosen user group
-- **Use case**: Organizing users into groups for access control, notifications, or reporting
+- **Use case**: Organizing users into groups for scalable control of location visibility
 
 ### What's in this repo
 
