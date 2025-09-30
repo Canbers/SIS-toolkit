@@ -1,10 +1,5 @@
 ## SIS Toolkit
 
-Simple, no-install web tools for working with SIS-related tasks. A production instance is publicly available at [sis.canby.ca](https://sis.canby.ca).
-
-### Live site
-
-- Visit: [sis.canby.ca](https://sis.canby.ca)
 
 ### Available Scripts
 
